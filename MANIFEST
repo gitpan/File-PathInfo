@@ -1,0 +1,10 @@
+lib/File/PathInfo.pm
+t/0_fpi.t
+t/1_fpi_hash.t
+t/public_html/demo/hellokitty.gif
+t/public_html/demo/civil.txt
+t/public_html/house.txt
+t/public_html/oake.jpg
+Makefile.PL
+MANIFEST
+META.yml                                 Module meta-data (added by MakeMaker)
