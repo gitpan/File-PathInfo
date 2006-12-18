@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Time::Format qw(%time);
 
-our $VERSION = sprintf "%d.%02d", q$Revision: 1.1 $ =~ /(\d+)/g;
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.2 $ =~ /(\d+)/g;
 
 =pod
 
@@ -239,6 +239,9 @@ sub _abs {
 		if ($_abs->{filename}=~/^(.+)\.(\w{1,4})$/){
 			$_abs->{filename_only} =$1;
 			$_abs->{ext} = $2;
+		}
+		else { #may be a dir
+			$_abs->{filename_only} = $_abs->{filename};	
 		}
 		
 		(defined $self->{check_exist}) or ($self->{check_exist} = 1);
