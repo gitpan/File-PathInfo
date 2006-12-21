@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Time::Format qw(%time);
 
-our $VERSION = sprintf "%d.%02d", q$Revision: 1.2 $ =~ /(\d+)/g;
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.6 $ =~ /(\d+)/g;
 
 =pod
 
@@ -101,7 +101,17 @@ If you want to disable that:
 Maybe this could be useful if you wanted to work with a path string that *was* present or *will be*.
 
 
-=head1 METHODS
+Absolute path methods are accessible always. 
+The relative path methods are accessible *if* you have DOCUMENT ROOT environment variable
+set or if you pass the argument DOCUMENT_ROOT to object constructor.
+
+If you are using cgi, ENV DOCUMENT_ROOT is set when you call the program via http (the 
+browser). But when you call the program via the cli (command line) it will likely not
+be set! This causes some programs to crash when you run then on the command line, and you
+scratch your head and ask 'how come?'.
+The same goes for the environment variable 'HOME', which is not set when you call your
+cgi script via http (browser) but is set if you call it via cli (the command line, shell
+access, etc.).
 
 =cut
 
@@ -111,6 +121,10 @@ sub new {
 	bless $self, $class;			
 	return $self;	
 }
+=pod
+
+=head1 METHODS
+
 =head2 new()
 
 Argument is optional hash ref.
@@ -139,29 +153,27 @@ use the relative file path methods.
 
 =back
 
-Absolute path methods are accessible always. 
-The relative path methods are accessible *if* you have DOCUMENT ROOT environment variable
-set or if you pass the argument DOCUMENT_ROOT to object constructor.
-
-If you are using cgi, ENV DOCUMENT_ROOT is set when you call the program via http (the 
-browser). But when you call the program via the cli (command line) it will likely not
-be set! This causes some programs to crash when you run then on the command line, and you
-scratch your head and ask 'how come?'.
-The same goes for the environment variable 'HOME', which is not set when you call your
-cgi script via http (browser) but is set if you call it via cli (the command line, shell
-access, etc.).
-
 =cut
 
 sub set {
 	my $self= shift;
 	$self->{_data} = undef;	
-	$self->{_data}->{_argument} = shift;	
-	$self->_abs or warn($self->errstr) and return 0;
+   my $arg = shift;
+	$self->{_data}->{_argument} = $arg;	
+	$self->_abs or carp("File::PathInfo '$arg' failed") and return 0;
 	return 1;
 }
-=head1 set()
 
+sub _argument {
+	my $self = shift;
+	$self->{_data}->{_argument} or confess("you must call set() before any other methods");
+	return $self->{_data}->{_argument};
+}
+=pod
+
+=head2 set()
+
+Set must always be called.
 Argument is a relative or absolute file path.
 	
 	$f->set('/tmp/trashdir'); # absolute path
@@ -170,7 +182,7 @@ Argument is a relative or absolute file path.
 
 	$f->set('./thisfile.png'); # relative to current working directory
 
-set() returns boolean, true or false. If the file cannot be resolved to disk
+Method C<set()> returns boolean, true or false. If the file cannot be resolved to disk
 then it returns undef.
 If you then call any methods, exceptions are thrown with Carp::croak.
 
@@ -180,12 +192,18 @@ You can do this too:
 	
 	$f->set('documents/manual.pdf') or print "Location: 404.html\n\n" and exit; 
 
-=cut
+=head2 get_datahash()
 
+Returns all elements, in a hash.
 
+=head2 errstr()
 
+Returns errot string or undef if no errors are present.
 
+To check for errors you can query the error string.
 
+	$f->set('/home/myself/this') or die($f->errstr);	
+	
 =head1 ABSOLUTE METHODS
 
 The absolute path methods. 
@@ -203,19 +221,28 @@ sub _abs {
 		my $_abs= {};	
 	
 		my $abs_path;
-		my $argument = $self->{_data}->{_argument} or croak("you must call set() before any other methods");
-		#### $argument	
+		
+		my $argument = $self->_argument;
+
+		
+		
+		# IS ARGUMENT ABS PATH ?
 		if ( $argument =~/^\// ){ # assume to be abs
 			$abs_path = Cwd::abs_path($argument) or ( 
 				$self->_error("cant resolve [$argument] as abs path") and return );		
 		}
 
+
+
+		# IS ARG REL TO CWD ?
 		# if starts with dot.. resolve to cwd
-		elsif ( $argument =~/^\./ ){
+		elsif ( $argument =~/^\.\// ){
 			$abs_path = Cwd::abs_path(cwd().'/'.$argument) or (
 				$self->_error("cant resolve [$argument] as path rel to cwd") and return );
 		}
 
+
+		# IS ARG REL TO DOC ROOT ?
 		else {
 			### assume to be rel path then	
 			unless( $self->DOCUMENT_ROOT ){
@@ -224,16 +251,32 @@ sub _abs {
 			}	
 	
 			$abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument);
-			$abs_path or $self->_error("cant resolve [$argument] as rel_path to doc root") and return;	
+			$abs_path or $self->_error("cant resolve [$argument] as rel_path to doc root")
+            and carp("File::PathInfo cant resolve [$argument] as rel_path to doc root")
+            and return;	
 	
 			### supposedly resolved..  
 		}
 
+
+
+
 		# set main vars
 	
-		$_abs->{abs_path} = $abs_path;
+		$_abs->{abs_path} = $abs_path or return; 
 
-		$abs_path=~/^(\/.+)\/([^\/]+)$/ or die("problem matching abs loc and filename in [$abs_path]"); # should not happen
+	   unless (defined $self->{check_exist}){
+         $self->{check_exist} = 1;
+      } 
+		if ($self->{check_exist}){
+			unless( -e $_abs->{abs_path} ){ 
+				#$self->_error( $_abs->{abs_path} ." is not on disk.");
+            carp "File::PathInfo '".$_abs->{abs_path} ."' is not on disk.";
+				return; 
+			}					
+		}
+
+		$abs_path=~/^(\/.+)\/([^\/]+)$/ or die("problem matching abs loc and filename in [$abs_path], argument was [$argument]"); # should not happen
 		$_abs->{abs_loc} = $1;
 		$_abs->{filename} = $2;
 		if ($_abs->{filename}=~/^(.+)\.(\w{1,4})$/){
@@ -244,16 +287,6 @@ sub _abs {
 			$_abs->{filename_only} = $_abs->{filename};	
 		}
 		
-		(defined $self->{check_exist}) or ($self->{check_exist} = 1);
-		if ($self->{check_exist}){
-			#print STDERR "checking exist\n";
-			unless( -e $_abs->{abs_path} ){ 
-				$self->_error( $_abs->{abs_path} ." is not on disk.");
-				return; 
-			}	
-				
-		}
-
 		$self->{_data}->{_abs} = $_abs;	
 	}
 	
@@ -282,6 +315,8 @@ sub filename_only {
 	my $self = shift;
 	return $self->_abs->{filename_only};
 }
+=pod
+
 =head2 abs_loc()
 
 Returns absolute location on disk. Everything but the filename, no trailing file
@@ -306,11 +341,9 @@ Does not return undef.
 
 Returns filename ext, if none found, returns undef.
 
-
 =head1 RELATIVE METHODS
 
 These methods are only available if a DOCUMENT ROOT is defined. 
-
 
 =cut
 
@@ -378,22 +411,31 @@ sub is_DOCUMENT_ROOT {
 	$self->abs_path eq $self->DOCUMENT_ROOT or return 0;
 	return 1;
 }
-=head1 rel_path()
+=pod
+
+=head2 rel_path()
 
 relative to DOCUMENT_ROOT
 
-=head1 rel_loc()
+=head2 rel_loc()
 
 location relative to DOCUMENT_ROOT
 
-=head1 is_DOCUMENT_ROOT()
+=head2 is_DOCUMENT_ROOT()
 
 if this *is* the document root
 
-=head1 is_topmost()
+=head2 is_topmost()
 
 if the parent directory is document root.
 boolean.
+
+=head2 is_in_DOCUMENT_ROOT()
+
+does this file reside in the DOCUMENT_ROOT tree ?
+note that DOCUMENT_ROOT itself *is* the document root, does is not
+considered to be *in* the document root. this is partly for security
+reasons.
 
 =cut
 
@@ -407,14 +449,6 @@ sub is_in_DOCUMENT_ROOT {
 
 	return 1;
 }
-=head1 is_in_DOCUMENT_ROOT()
-
-does this file reside in the DOCUMENT_ROOT tree ?
-note that DOCUMENT_ROOT itself *is* the document root, does is not
-considered to be *in* the document root. this is partly for security
-reasons.
-
-=cut
 
 sub DOCUMENT_ROOT {
 	my $self = shift;	
@@ -440,7 +474,9 @@ sub DOCUMENT_ROOT {
 	}	
 	return $self->{_data}->{DOCUMENT_ROOT};
 }
-=head1 DOCUMENT_ROOT()
+=pod
+
+=head2 DOCUMENT_ROOT()
 
 Returns doc root, returns undef if not set, or if it cant resolve to abs path on disk.
 You can override the DOCUMENT root like this:
@@ -464,19 +500,6 @@ of File::PathInfo is:
 First, in argument to contructor
 
 Second, if your environment variable DOCUMENT_ROOT is set. 
-
-=cut
-
-
-
-
-
-
-
-
-
-
-
 
 =head1 EXTENDED METHODS
 
@@ -525,9 +548,23 @@ sub is_file {
 	my $self = shift;
 	return $self->_ask->{is_file};
 }
-=head1 is_binary(), is_text(), is_dir(), and is_file()
+=pod
 
-all return boolean true or false.
+=head2 is_binary()
+
+returns boolean true or false.
+
+=head2 is_text()
+
+returns boolean true or false.
+
+=head2 is_dir()
+
+returns boolean true or false.
+
+=head2 is_file()
+
+returns boolean true or false.
 
 =cut
 
@@ -564,6 +601,8 @@ sub _stat {
 
 	return $self->{_data}->{_stat};	
 }
+=pod
+
 =head1 STAT METHODS
 
 These return values just as stat would.
@@ -658,20 +697,47 @@ sub nlink  {
  my $self = shift;
  return $self->_stat->{nlink};
 }
+=pod
 
-=head2 filesize()
+=head2 ctime()
 
-Returns filesize in bites.
+=head2 atime()
+
+=head2 mtime()
+
+=head2 uid()
+
+=head2 ino()
+
+=head2 blksize()
+
+=head2 blocks()
+
+=head2 dev()
+
+=head2 gid()
+
+=head2 mode()
+
+=head2 nlink()
+
+=head2 rdev()
+
+=head2 size()
+
+=head1 EXTENDED STAT METHODS
+
+These are human legible equivalents.
 
 =head2 filesize_pretty()
 
-Returns filesize in k, with the letter k in the end returns 0k if filesize is 0 
+Returns filesize in k, with the letter k in the end returns 0k if filesize is 0 .
 
-=head2 ctime(), atime(), mtime()
+=head2 ctime_pretty()
 
-These return unix timestamps. You can run the command 'perldoc -f stat' for more details.
+=head2 atime_pretty()
 
-=head2 ctime_pretty(), atime_pretty(), mtime_pretty()
+=head2 mtime_pretty()
 
 Returns these timestamps formatted to 'yyyy/mm/dd hh:mm' by default. 
 To change the format, pass it as argument to object constructor as such:
@@ -681,12 +747,10 @@ To change the format, pass it as argument to object constructor as such:
 	$r->set('/home/myself/archive1.zip');
 	
 	$r->ctime_pretty; # now holds 1999_11_13
+   
+=head2 filesize()
 
-=head2 uid(), ino(), blksize(), blocks(), dev(), gid(), mode(), nlink(), rdev(),
-uid(), and size()
-
-Return user id number, inode number, block size, blocks, device number, group id number,
-mode, number of links, rdev, user id number, and size in bites.
+Returns filesize in bites.
 
 =cut
 
@@ -723,25 +787,6 @@ sub get_datahash {
 	return $data;	
 }
 
-=head1 get_datahash()
-
-Returns all elements, in a hash.
-
-=cut
-
-
-
-=head1 errstr()
-
-Returns errostring or undef if no errors are present.
-
-To check for errors you can query the error string.
-
-	$f->set('/home/myself/this') or die($f->errstr);
-	
-	
-=cut
-
 sub _error {
 	my $self = shift;
 	my $arg = shift;
@@ -753,6 +798,7 @@ sub errstr {
 	defined $self->{_data}->{_errors} or return;
 	return $self->{_data}->{_errors};
 }
+=pod
 
 =head1 CAVEATS
 
@@ -772,11 +818,11 @@ Please report any bugs to developer.
 
 Leo Charre leo (at) leocharre (dot) com
 
-http://leocharre.com
+L<http://leocharre.com>
 
 =head1 PREREQUISITES
 
-Cwd, Carp, Time::Format
+L<Cwd>, L<Carp>, L<Time::Format>
 
 =head1 LICENSE
 
@@ -786,7 +832,7 @@ Perl itself.
 
 =head1 SEE ALSO
 
-Cwd
+L<Cwd>
 
 =cut
 

@@ -1,4 +1,4 @@
-use Test::Simple tests=>57;
+use Test::Simple 'no_plan';
 use strict;
 use lib './lib';
 use File::PathInfo;
@@ -107,4 +107,23 @@ ok($b->rel_path eq 'demo/civil.txt');
 
 $b->set('./t/public_html/demo/../demo/cvil.txt');
 # calling susequent methods would throw exception
+
+
+
+
+# test non exist
+
+for (
+'./t/public_html/de41zmo',
+'demvo2',
+'./t/public_html/demo/../demo/civil.txt/',
+){
+	
+	my $argument = $_;
+	my $f = new File::PathInfo;
+	my $exists = $f->set($argument);
+   $exists ||= 0;
+
+   ok(!$exists);
+}   
 
