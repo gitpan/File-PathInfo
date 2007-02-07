@@ -6,7 +6,7 @@ use strict;
 use warnings;
 use Time::Format qw(%time);
 
-our $VERSION = sprintf "%d.%02d", q$Revision: 1.6 $ =~ /(\d+)/g;
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.8 $ =~ /(\d+)/g;
 
 =pod
 
@@ -160,7 +160,12 @@ sub set {
 	$self->{_data} = undef;	
    my $arg = shift;
 	$self->{_data}->{_argument} = $arg;	
-	$self->_abs or carp("File::PathInfo '$arg' failed") and return 0;
+	unless($self->_abs){
+      carp("'$arg' cannot resolve to disk");
+      $self->{_data}->{exists} = 0 ;
+      return 0;
+   }  
+   $self->{_data}->{exists} = 1 ;
 	return 1;
 }
 
@@ -213,15 +218,23 @@ The absolute path methods.
 sub _abs {
 	my $self = shift;	
 
-	croak($self->errstr) if $self->errstr;
+#	croak($self->errstr) if $self->errstr;
 	
 
 	unless( defined $self->{_data}->{_abs} ){
 
-		my $_abs= {};	
-	
-		my $abs_path;
-		
+		my $_abs = {
+         abs_loc => undef,
+         filename => undef,
+         abs_path => undef,
+         filename_only => undef,
+         ext => undef,
+         
+      
+      };	
+	   $self->{_data}->{_abs} = $_abs;
+      
+		my $abs_path;		
 		my $argument = $self->_argument;
 
 		
@@ -229,7 +242,9 @@ sub _abs {
 		# IS ARGUMENT ABS PATH ?
 		if ( $argument =~/^\// ){ # assume to be abs
 			$abs_path = Cwd::abs_path($argument) or ( 
-				$self->_error("cant resolve [$argument] as abs path") and return );		
+            ### $argument
+            ### cant resolve with Cwd abs_path
+				return 0 );		
 		}
 
 
@@ -238,7 +253,9 @@ sub _abs {
 		# if starts with dot.. resolve to cwd
 		elsif ( $argument =~/^\.\// ){
 			$abs_path = Cwd::abs_path(cwd().'/'.$argument) or (
-				$self->_error("cant resolve [$argument] as path rel to cwd") and return );
+            ### $argument
+            ### cant resolve as path rel to current working dir with Cwd abs_path
+            return 0 );
 		}
 
 
@@ -246,14 +263,15 @@ sub _abs {
 		else {
 			### assume to be rel path then	
 			unless( $self->DOCUMENT_ROOT ){
-				$self->_error("cant resolve [$argument] as rel_path to doc root because DOCUMENT_ROOT is not set");
-				return;
+            ### $argument
+            ### doc root not set, cant resolve with that either           
+				return 0;
 			}	
 	
-			$abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument);
-			$abs_path or $self->_error("cant resolve [$argument] as rel_path to doc root")
-            and carp("File::PathInfo cant resolve [$argument] as rel_path to doc root")
-            and return;	
+			$abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument) or (
+            ### $argument
+            ### cant resolve as relative to DOCUMENT ROOT either
+            return 0 );	
 	
 			### supposedly resolved..  
 		}
@@ -263,7 +281,7 @@ sub _abs {
 
 		# set main vars
 	
-		$_abs->{abs_path} = $abs_path or return; 
+		$_abs->{abs_path} = $abs_path or return 0; 
 
 	   unless (defined $self->{check_exist}){
          $self->{check_exist} = 1;
@@ -271,12 +289,13 @@ sub _abs {
 		if ($self->{check_exist}){
 			unless( -e $_abs->{abs_path} ){ 
 				#$self->_error( $_abs->{abs_path} ." is not on disk.");
-            carp "File::PathInfo '".$_abs->{abs_path} ."' is not on disk.";
-				return; 
+            ### $abs_path 
+            ### is explicitely !-e on disk            
+            return 0; 
 			}					
 		}
 
-		$abs_path=~/^(\/.+)\/([^\/]+)$/ or die("problem matching abs loc and filename in [$abs_path], argument was [$argument]"); # should not happen
+		$abs_path=~/^(\/.+)\/([^\/]+)$/ or die("problem matching abs loc and filename in [$abs_path], argument was [$argument] - maybe you are trying to use a path like /etc , bad juju."); # should not happen
 		$_abs->{abs_loc} = $1;
 		$_abs->{filename} = $2;
 		if ($_abs->{filename}=~/^(.+)\.(\w{1,4})$/){
@@ -353,10 +372,15 @@ sub _rel {
 	croak($self->errstr) if $self->errstr;	
 
 	unless( defined $self->{_data}->{_rel}){
-		my $_rel = {};
-	
-		my $doc_root = $self->DOCUMENT_ROOT or croak('cant init rel path methods, DOCUMENT_ROOT not resolving. ' . $self->errstr);
-		my $abs_path = $self->abs_path;
+		my $_rel = {
+         rel_path => undef,
+         rel_loc => undef,         
+      };
+	   $self->{_data}->{_rel} = $_rel;
+      $self->DOCUMENT_ROOT or warn('cant use rel methods because DOCUMENT ROOT is not set') and return $_rel;
+      
+		my $doc_root = $self->DOCUMENT_ROOT;
+		my $abs_path = $self->abs_path or return $_rel;
 
 		if ($doc_root eq $abs_path){
 			$_rel->{rel_path} = '';
@@ -364,7 +388,9 @@ sub _rel {
 		}
 
 		else {
-
+         
+         $self->is_in_DOCUMENT_ROOT or warn("cant use rel methods because this file [$abs_path] is NOT WITHIN DOCUMENT ROOT:".$self->DOCUMENT_ROOT) and return $_rel;
+         
 			my $rel_path = $abs_path; #  by now if it was the same as document root, should have been detected
 			$rel_path=~s/^$doc_root\/// or croak("abs path [$abs_path] is NOT within DOCUMENT ROOT [$doc_root]");
 	
@@ -441,7 +467,7 @@ reasons.
 
 sub is_in_DOCUMENT_ROOT {
 	my $self = shift;
-
+   $self->exists or return;
 	my $abs_path = $self->abs_path;
 	my $document_root = $self->DOCUMENT_ROOT;
 
@@ -515,14 +541,34 @@ sub _ask { #TODO: should be part of stat, stat can tell if it's -d -l or whateve
 
 	croak($self->errstr) if $self->errstr;
 
-	unless( defined $self->{_data}->{_basic}){		
-		
-		my $basic = { #TODO this is wasteful
+	unless( defined $self->{_data}->{_basic}){	
+      my $basic = { #TODO this is wasteful
+			is_file => undef,
+			is_dir => undef,
+			is_binary =>undef,
+			is_text => undef,		
+         is_topmost => undef,
+         is_document_root => undef,
+         is_in_document_root =>  undef,
+		};
+      $self->exists or return $basic;
+
+   
+		$basic = { #TODO this is wasteful
 			is_file => ( -f $self->abs_path or 0 ),
 			is_dir => ( -d $self->abs_path or 0 ),
 			is_binary => ( -B $self->abs_path() or 0 ),
 			is_text => ( -T $self->abs_path() or 0 ),		
+         is_topmost => $self->is_topmost,
 		};
+      
+      if ($self->DOCUMENT_ROOT){
+      
+         $basic->{is_document_root} = $self->is_DOCUMENT_ROOT,
+         $basic->{is_in_document_root} =  $self->is_in_DOCUMENT_ROOT,
+
+      }
+      
 		$self->{_data}->{_basic} =$basic;
 	
 	}
@@ -571,7 +617,7 @@ returns boolean true or false.
 # init stat
 sub _stat {
 	my $self = shift;
-
+   $self->exists or warn('before calling stat methods you must use set() succesfully') and  return {};
 	croak($self->errstr) if $self->errstr;
 
 	unless( defined $self->{_data}->{_stat}){	
@@ -797,6 +843,14 @@ sub errstr {
 	my $self = shift;
 	defined $self->{_data}->{_errors} or return;
 	return $self->{_data}->{_errors};
+}
+
+sub exists {
+   my $self = shift;
+
+   defined $self->{_data}->{exists} or croak('must call set() first');
+      
+   return $self->{_data}->{exists};
 }
 =pod
 
