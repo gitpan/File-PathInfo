@@ -2,7 +2,6 @@ use Test::Simple 'no_plan';
 use strict;
 use lib './lib';
 use File::PathInfo;
-#use Smart::Comments '###';
 use Cwd;
 use warnings;
 $ENV{DOCUMENT_ROOT} = cwd().'/t/public_html';

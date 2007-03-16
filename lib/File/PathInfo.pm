@@ -1,12 +1,11 @@
 package File::PathInfo;
 use Cwd;
 use Carp;
-#use Smart::Comments '###','####';
 use strict;
 use warnings;
 use Time::Format qw(%time);
 
-our $VERSION = sprintf "%d.%02d", q$Revision: 1.8 $ =~ /(\d+)/g;
+our $VERSION = sprintf "%d.%02d", q$Revision: 1.9 $ =~ /(\d+)/g;
 
 =pod
 

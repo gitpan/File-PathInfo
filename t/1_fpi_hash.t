@@ -3,7 +3,6 @@ use strict;
 use Cwd;
 use lib './lib';
 use File::PathInfo;
-use Smart::Comments '###';
 $ENV{DOCUMENT_ROOT} = cwd()."/t/public_html";
 
 
