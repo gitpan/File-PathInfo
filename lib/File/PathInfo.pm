@@ -4,8 +4,19 @@ use Carp;
 use strict;
 use warnings;
 use Time::Format qw(%time);
+require Exporter;
+use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
+@ISA = qw(Exporter);
+@EXPORT_OK = qw(abs_path_n);
+%EXPORT_TAGS = (
+	all => \@EXPORT_OK,
+);
+$VERSION = sprintf "%d.%02d", q$Revision: 1.12 $ =~ /(\d+)/g;
 
-our $VERSION = sprintf "%d.%02d", q$Revision: 1.9 $ =~ /(\d+)/g;
+
+my $DEBUG=0; sub DEBUG : lvalue { $DEBUG }
+my $RESOLVE_SYMLINKS=1; sub RESOLVE_SYMLINKS : lvalue { $RESOLVE_SYMLINKS }
+my $TIME_FORMAT = 'yyyy/mm/dd hh::mm'; sub TIME_FORMAT : lvalue { $TIME_FORMAT }
 
 =pod
 
@@ -117,7 +128,23 @@ access, etc.).
 sub new {
 	my ($class, $self) = (shift, shift);
 	$self ||= {};		
+	
+	my $arg;
+	unless( ref $self ){
+		print STDERR "arg is not a ref, treating as arg\n" if DEBUG;
+		# assume to be path argument
+		$arg = $self;
+		$self = {};	
+	}
+	
 	bless $self, $class;			
+
+	if ($arg){
+		print STDERR "will run set, " if DEBUG;
+		$self->set($arg);
+		print STDERR "ok\n" if DEBUG;
+	}	
+		
 	return $self;	
 }
 =pod
@@ -126,9 +153,14 @@ sub new {
 
 =head2 new()
 
-Argument is optional hash ref.
+Argument is either a hash ref or an absolute or relative path to a file.
 
 	my $fi = new File::PathInfo;
+	$fi->set('/home/myself/html/file.txt');
+
+	# or
+
+	my $fi = new File::PathInfo('/home/myself/html/file.txt');
 
 Optional parameters to constructor:
 
@@ -160,7 +192,7 @@ sub set {
    my $arg = shift;
 	$self->{_data}->{_argument} = $arg;	
 	unless($self->_abs){
-      carp("'$arg' cannot resolve to disk");
+      carp("set() '$arg' is not on disk.");
       $self->{_data}->{exists} = 0 ;
       return 0;
    }  
@@ -177,7 +209,8 @@ sub _argument {
 
 =head2 set()
 
-Set must always be called.
+Unless you provide an argument to the constructor, set() must be called.
+You can use set() to iterate through a list of paths.
 Argument is a relative or absolute file path.
 	
 	$f->set('/tmp/trashdir'); # absolute path
@@ -196,9 +229,54 @@ You can do this too:
 	
 	$f->set('documents/manual.pdf') or print "Location: 404.html\n\n" and exit; 
 
+
 =head2 get_datahash()
 
-Returns all elements, in a hash.
+Takes no argument. Returns all elements, in a hash. 
+
+Try it out:
+
+	#!/usr/bin/perl -w
+	use File::PathInfo;
+	use Smart::Comments '###';
+	my $f = new File::PathInfo;	
+	$f->set '/home/bubba'
+	my $hash = $f->get_datahash;
+	### $hash
+
+Prints out:
+
+	### $hash: {
+	###          abs_loc => '/home',
+	###          abs_path => '/home/bubba',
+	###          atime => 1173859680,
+	###          atime_pretty => '2007/03/14 04:08',
+	###          blksize => 4096,
+	###          blocks => 8,
+	###          ctime => 1173216034,
+	###          ctime_pretty => '2007/03/06 16:20',
+	###          dev => 2049,
+	###          filename => 'bubba',
+	###          filename_only => 'bubba',
+	###          filesize => '4096',
+	###          filesize_pretty => '4k',
+	###          gid => 0,
+	###          ino => 3626597,
+	###          is_binary => 1,
+	###          is_dir => 1,
+	###          is_file => 0,
+	###          is_text => 0,
+	###          is_topmost => 0,
+	###          mode => 16877,
+	###          mtime => 1173216034,
+	###          mtime_pretty => '2007/03/06 16:20',
+	###          nlink => 3,
+	###          rdev => 0,
+	###          size => '4096',
+	###          uid => 0
+	###        }
+
+=cut
 
 =head2 errstr()
 
@@ -217,8 +295,7 @@ The absolute path methods.
 sub _abs {
 	my $self = shift;	
 
-#	croak($self->errstr) if $self->errstr;
-	
+#	croak($self->errstr) if $self->errstr;	
 
 	unless( defined $self->{_data}->{_abs} ){
 
@@ -227,9 +304,7 @@ sub _abs {
          filename => undef,
          abs_path => undef,
          filename_only => undef,
-         ext => undef,
-         
-      
+         ext => undef,       
       };	
 	   $self->{_data}->{_abs} = $_abs;
       
@@ -239,11 +314,12 @@ sub _abs {
 		
 		
 		# IS ARGUMENT ABS PATH ?
-		if ( $argument =~/^\// ){ # assume to be abs
-			$abs_path = Cwd::abs_path($argument) or ( 
-            ### $argument
-            ### cant resolve with Cwd abs_path
-				return 0 );		
+		if ( $argument =~/^\// ) {			
+			$abs_path = Cwd::abs_path($argument) ;
+			unless($abs_path){ 
+				print STDERR "argument : '$argument', cant resolve with Cwd::abs_path\n" if DEBUG;
+				 return ;
+			}	
 		}
 
 
@@ -251,10 +327,11 @@ sub _abs {
 		# IS ARG REL TO CWD ?
 		# if starts with dot.. resolve to cwd
 		elsif ( $argument =~/^\.\// ){
-			$abs_path = Cwd::abs_path(cwd().'/'.$argument) or (
-            ### $argument
-            ### cant resolve as path rel to current working dir with Cwd abs_path
-            return 0 );
+			unless( $abs_path = Cwd::abs_path(cwd().'/'.$argument) ){
+					print STDERR "argument: '$argument', "
+					."cant resolve as path rel to current working dir with Cwd abs_path\n" if DEBUG;
+					return 0 ;
+			}	
 		}
 
 
@@ -262,17 +339,16 @@ sub _abs {
 		else {
 			### assume to be rel path then	
 			unless( $self->DOCUMENT_ROOT ){
-            ### $argument
-            ### doc root not set, cant resolve with that either           
-				return 0;
+				print STDERR "argument: '$argument'- DOCUMENT_ROOT "
+				."is not set, needed for an argument starting with a dot\n" if DEBUG
+				and return 0;
 			}	
 	
-			$abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument) or (
-            ### $argument
-            ### cant resolve as relative to DOCUMENT ROOT either
-            return 0 );	
+			unless( $abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument) ){
+            print STDERR "argument: '$argument' cant resolve as relative to DOCUMENT ROOT either\n" if DEBUG;
+            return 0 ;
+			}	
 	
-			### supposedly resolved..  
 		}
 
 
@@ -287,6 +363,7 @@ sub _abs {
       } 
 		if ($self->{check_exist}){
 			unless( -e $_abs->{abs_path} ){ 
+				print STDERR "'$$_abs{abs_path}' is not on disk\n" if DEBUG;
 				#$self->_error( $_abs->{abs_path} ." is not on disk.");
             ### $abs_path 
             ### is explicitely !-e on disk            
@@ -294,7 +371,10 @@ sub _abs {
 			}					
 		}
 
-		$abs_path=~/^(\/.+)\/([^\/]+)$/ or die("problem matching abs loc and filename in [$abs_path], argument was [$argument] - maybe you are trying to use a path like /etc , bad juju."); # should not happen
+		$abs_path=~/^(\/.+)\/([^\/]+)$/ 
+			or die("problem matching abs loc and filename in [$abs_path], ".
+			"argument was [$argument] - maybe you are trying to use a path like /etc,"
+			."bad juju."); # should not happen
 		$_abs->{abs_loc} = $1;
 		$_abs->{filename} = $2;
 		if ($_abs->{filename}=~/^(.+)\.(\w{1,4})$/){
@@ -376,7 +456,8 @@ sub _rel {
          rel_loc => undef,         
       };
 	   $self->{_data}->{_rel} = $_rel;
-      $self->DOCUMENT_ROOT or warn('cant use rel methods because DOCUMENT ROOT is not set') and return $_rel;
+      $self->DOCUMENT_ROOT or warn('cant use rel methods because DOCUMENT ROOT is not set')
+			and return $_rel;
       
 		my $doc_root = $self->DOCUMENT_ROOT;
 		my $abs_path = $self->abs_path or return $_rel;
@@ -388,7 +469,11 @@ sub _rel {
 
 		else {
          
-         $self->is_in_DOCUMENT_ROOT or warn("cant use rel methods because this file [$abs_path] is NOT WITHIN DOCUMENT ROOT:".$self->DOCUMENT_ROOT) and return $_rel;
+         unless( $self->is_in_DOCUMENT_ROOT ){ 
+				warn("cant use rel methods because this file [$abs_path] is "
+				."NOT WITHIN DOCUMENT ROOT:".$self->DOCUMENT_ROOT) if DEBUG;
+				return $_rel;
+			}	
          
 			my $rel_path = $abs_path; #  by now if it was the same as document root, should have been detected
 			$rel_path=~s/^$doc_root\/// or croak("abs path [$abs_path] is NOT within DOCUMENT ROOT [$doc_root]");
@@ -399,7 +484,8 @@ sub _rel {
 				my $rel_loc = $1;
 				my $filename = $2;
 
-				$filename eq $self->filename or die("filename from abs path not same as filename from init rel regex, why??");
+				$filename eq $self->filename or 
+					die("filename from abs path not same as filename from init rel regex, why??");
 		
 				$_rel->{rel_loc} = $1;	
 			}
@@ -526,72 +612,83 @@ First, in argument to contructor
 
 Second, if your environment variable DOCUMENT_ROOT is set. 
 
-=head1 EXTENDED METHODS
+=head1 STAT METHODS
 
 These methods ask useful things like, is the file a directory, is it binary,
 is it text, what is the mtime, etc. These methods load data on call, they can 
-be expensive if you are looping through thousands of files. So don'nt worry 
+be expensive if you are looping through thousands of files. So don't worry 
 because if you don't need them, they are not called.
+Using one or more of these methods makes one stat call only.
 
 =cut
 
-sub _ask { #TODO: should be part of stat, stat can tell if it's -d -l or whatever
-	my $self = shift;
 
+# init stat
+sub _stat {
+	my $self = shift;
+   unless( $self->exists ){
+		carp('File::PathInfo : no file is set(). Use set().') if DEBUG;
+		return {};
+	}	
 	croak($self->errstr) if $self->errstr;
 
-	unless( defined $self->{_data}->{_basic}){	
-      my $basic = { #TODO this is wasteful
-			is_file => undef,
-			is_dir => undef,
-			is_binary =>undef,
-			is_text => undef,		
-         is_topmost => undef,
-         is_document_root => undef,
-         is_in_document_root =>  undef,
-		};
-      $self->exists or return $basic;
+	unless( defined $self->{_data}->{_stat}){	
 
-   
-		$basic = { #TODO this is wasteful
-			is_file => ( -f $self->abs_path or 0 ),
-			is_dir => ( -d $self->abs_path or 0 ),
-			is_binary => ( -B $self->abs_path() or 0 ),
-			is_text => ( -T $self->abs_path() or 0 ),		
-         is_topmost => $self->is_topmost,
-		};
-      
-      if ($self->DOCUMENT_ROOT){
-      
-         $basic->{is_document_root} = $self->is_DOCUMENT_ROOT,
-         $basic->{is_in_document_root} =  $self->is_in_DOCUMENT_ROOT,
 
-      }
-      
-		$self->{_data}->{_basic} =$basic;
+		$self->{time_format} ||= 'yyyy/mm/dd hh:mm';
+
+	#	my $data = {};
 	
+		my @stat =  stat $self->abs_path or die("$! - cant stat ".$self->abs_path);
+
+		my $data = {
+			is_file				=> -f _ ? 1 : 0,
+			is_dir				=> -d _ ? 1 : 0,
+			is_binary			=> -B _ ? 1 : 0,
+			is_text				=> -T _ ? 1 : 0,		
+         is_topmost			=> $self->is_topmost,
+         is_document_root	=> $self->DOCUMENT_ROOT ? $self->is_DOCUMENT_ROOT : undef,
+         is_in_document_root =>  $self->DOCUMENT_ROOT ? $self->is_in_DOCUMENT_ROOT : undef,		
+		};
+		
+		my @keys = qw(dev ino mode nlink uid gid rdev size atime mtime ctime blksize blocks);
+		#map { $data->{ shift @keys } = $_ } @stat; 
+		for (@stat) {
+		 	my $v= $_;
+		 	my $key = shift @keys;		
+			$data->{$key} = $v;		
+		}
+		
+		$data->{ filesize_pretty }	= ( sprintf "%d",($data->{size} / 1024 )).'k';
+		$data->{ ctime_pretty }		= $time{$self->{time_format},$data->{ctime}};
+		$data->{ atime_pretty }		= $time{$self->{time_format},$data->{atime}};
+		$data->{ mtime_pretty }		= $time{$self->{time_format},$data->{mtime}};
+		$data->{ filesize }		= $data->{size};
+	
+		$self->{_data}->{_stat} = $data;		
 	}
-	return $self->{_data}->{_basic};
+
+	return $self->{_data}->{_stat};	
 }
 
 sub is_binary {
 	my $self = shift;
-	return $self->_ask->{is_binary};
+	return $self->_stat->{is_binary};
 }
 
 sub is_dir {
 	my $self = shift;
-	return $self->_ask->{is_dir};
+	return $self->_stat->{is_dir};
 }
 
 sub is_text {
 	my $self = shift;
-	return $self->_ask->{is_text};
+	return $self->_stat->{is_text};
 }
 
 sub is_file {
 	my $self = shift;
-	return $self->_ask->{is_file};
+	return $self->_stat->{is_file};
 }
 =pod
 
@@ -613,46 +710,6 @@ returns boolean true or false.
 
 =cut
 
-# init stat
-sub _stat {
-	my $self = shift;
-   $self->exists or warn('before calling stat methods you must use set() succesfully') and  return {};
-	croak($self->errstr) if $self->errstr;
-
-	unless( defined $self->{_data}->{_stat}){	
-
-
-		$self->{time_format} ||= 'yyyy/mm/dd hh:mm';
-
-		my $data = {};
-	
-		my @stat =  stat $self->abs_path or die("$! - cant stat ".$self->abs_path);
-		my @keys = qw(dev ino mode nlink uid gid rdev size atime mtime ctime blksize blocks);
-		for (@stat) {
-		 	my $v= $_;
-		 	my $key = shift @keys;		
-			$data->{$key} = $v;		
-		}
-		
-		$data->{ filesize_pretty }	= ( sprintf "%d",($data->{size} / 1024 )).'k';
-		$data->{ ctime_pretty }		= $time{$self->{time_format},$data->{ctime}};
-		$data->{ atime_pretty }		= $time{$self->{time_format},$data->{atime}};
-		$data->{ mtime_pretty }		= $time{$self->{time_format},$data->{mtime}};
-		$data->{ filesize }		= $data->{size};	
-	
-		$self->{_data}->{_stat} = $data;
-		
-	}
-
-	return $self->{_data}->{_stat};	
-}
-=pod
-
-=head1 STAT METHODS
-
-These return values just as stat would.
-
-=cut
 sub filesize {	
  my $self = shift;
  return $self->_stat->{filesize};
@@ -770,10 +827,6 @@ sub nlink  {
 
 =head2 size()
 
-=head1 EXTENDED STAT METHODS
-
-These are human legible equivalents.
-
 =head2 filesize_pretty()
 
 Returns filesize in k, with the letter k in the end returns 0k if filesize is 0 .
@@ -799,7 +852,6 @@ Returns filesize in bites.
 
 =cut
 
-
 sub get_datahash {
 	my $self = shift;
 	
@@ -814,12 +866,6 @@ sub get_datahash {
 	for (keys %{$self->_rel}){
 		if (defined $self->_rel->{$_}){
 			$data->{$_} = $self->_rel->{$_};
-		}
-	}
-	
-	for (keys %{$self->_ask}){
-		if (defined $self->_ask->{$_}){
-			$data->{$_} = $self->_ask->{$_};
 		}
 	}
 	
@@ -851,11 +897,80 @@ sub exists {
       
    return $self->{_data}->{exists};
 }
-=pod
 
+
+=head1 PROCEDURAL SUBROUTINES
+
+None of these functions are exported by default.
+These subs are used by the oo methods internally, and you can use them in your code also
+by the normal import ways:
+
+	use File::PathInfo ':all';
+
+	use File::PathInfo qw(abs_path_n);
+
+=cut
+
+sub abs_path_n {
+	my $absPath = shift;
+	return $absPath if $absPath =~ m{^/$};
+   my @elems = split m{/}, $absPath;
+   my $ptr = 1;
+   while($ptr <= $#elems)
+    {
+        if($elems[$ptr] eq q{})
+        {
+            splice @elems, $ptr, 1;
+        }
+        elsif($elems[$ptr] eq q{.})
+        {
+            splice @elems, $ptr, 1;
+        }
+        elsif($elems[$ptr] eq q{..})
+        {
+            if($ptr < 2)
+            {
+                splice @elems, $ptr, 1;
+            }
+            else
+            {
+                $ptr--;
+                splice @elems, $ptr, 2;
+            }
+        }
+        else
+        {
+            $ptr++;
+        }
+    }
+    return $#elems ? join q{/}, @elems : q{/};
+
+	# by JohnGG 
+	# http://perlmonks.org/?node_id=603442	
+}
+
+=head2 abs_path_n()
+
+just like Cwd::abs_path() but, does not resolve symlinks. Just cleans up the path.
+argument is an absolute path.
+
+=cut
+
+=head1 PACKAGE SETTINGS
+
+Resolve symlinks? Default is 1
+
+	File::PathInfo::RESOLVE_SYMLINKS = 0;	
+
+Debug
+
+	File::PathInfo::DEBUG = 1;	
+	
 =head1 CAVEATS
 
 This is currently for unix filesystems.
+The module gets very angry when you set() seomthing like '/etc', anything that sits close to
+the root of the filesystem. This is on purpose.
 
 =head1 TODO
 
@@ -869,7 +984,7 @@ Please report any bugs to developer.
 
 =head1 AUTHOR
 
-Leo Charre leo (at) leocharre (dot) com
+Leo Charre	leocharre at cpan dot org
 
 L<http://leocharre.com>
 

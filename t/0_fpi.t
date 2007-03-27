@@ -1,7 +1,8 @@
 use Test::Simple 'no_plan';
 use strict;
 use lib './lib';
-use File::PathInfo;
+use File::PathInfo ':all';
+File::PathInfo::DEBUG =1;
 use Cwd;
 use warnings;
 $ENV{DOCUMENT_ROOT} = cwd().'/t/public_html';
@@ -9,20 +10,19 @@ $ENV{DOCUMENT_ROOT} = cwd().'/t/public_html';
 use Carp;
 
 # test ones we know are in docroot
-for (
-'./t/public_html/demo',
-'demo',
-'./t/public_html/demo/hellokitty.gif',
-'./t/public_html/demo/../demo/civil.txt',
-'demo/../demo/civil.txt',
-
-'demo/civil.txt',
-){
+for (qw(
+./t/public_html/demo
+demo
+./t/public_html/demo/hellokitty.gif
+./t/public_html/demo/../demo/civil.txt
+demo/../demo/civil.txt
+demo/civil.txt
+)){
 	
 	my $argument = $_;
-	my $f = new File::PathInfo or die( $File::PathInfo::errstr );
-
-	$f->set($argument) or die($File::PathInfo::errstr);
+	my $f = new File::PathInfo($argument) or die( $File::PathInfo::errstr );
+#	my $f = new File::PathInfo or die( $File::PathInfo::errstr );
+#	$f->set($argument) or die($File::PathInfo::errstr);
 	
 	ok($f);
 
@@ -30,9 +30,7 @@ for (
 	ok($f->filename);
 	ok($f->abs_path);
 	ok($f->abs_loc);
-	ok($f->is_in_DOCUMENT_ROOT);
-
-	
+	ok($f->is_in_DOCUMENT_ROOT);	
 
 	my $status = {
 		docroot => $f->DOCUMENT_ROOT,
@@ -45,7 +43,8 @@ for (
 		abs_path => $f->abs_path,
 		abs_loc => $f->abs_loc,
 	};	
-		
+
+
 	
 	### $status
 }	
@@ -53,7 +52,7 @@ for (
 
 
 
-
+print STDERR "2) things we know are not in doc root\n";
 # test ones we know are NOT in doc root
 for (
 './t/public_html',
@@ -120,9 +119,12 @@ for (
 	
 	my $argument = $_;
 	my $f = new File::PathInfo;
-	my $exists = $f->set($argument);
-   $exists ||= 0;
+	
+	ok( ($f->set($argument) ? 0 : 1) );
+	
+#	my $exists = $f->set($argument);
+ #  $exists ||= 0;
 
-   ok(!$exists);
+  # ok(!$exists);
 }   
 

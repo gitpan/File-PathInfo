@@ -10,9 +10,15 @@ $ENV{DOCUMENT_ROOT} = cwd()."/t/public_html";
 
 my $r = new File::PathInfo;
 ok( $r->set('./t/public_html/house.txt') );
+ok( $r->is_in_DOCUMENT_ROOT , 'is in document root');
 
-ok(my $hash = $r->get_datahash);
+ok( my $hash = $r->get_datahash);
 ###  $hash
+
+
+
+
+print STDERR "2) things that do not exist.\n";
 
 
 
@@ -21,8 +27,8 @@ for (qw(./t/public_html/hhahahahahahahouse.txt /nons/ense /moreneo/nensense )){
    ### $_
 
 
-   my $r = new File::PathInfo;
-   my $set_worked = $r->set($_);
+   my $r = new File::PathInfo($_);
+#   my $set_worked = $r->set($_);
    ### $set_worked
 
 #   $r->abs_loc;
