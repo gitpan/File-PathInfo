@@ -11,7 +11,7 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.12 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%02d", q$Revision: 1.13 $ =~ /(\d+)/g;
 
 
 my $DEBUG=0; sub DEBUG : lvalue { $DEBUG }
@@ -958,7 +958,7 @@ argument is an absolute path.
 
 =head1 PACKAGE SETTINGS
 
-Resolve symlinks? Default is 1
+Resolve symlinks? Default is 1 ( Not Yet Implemented )
 
 	File::PathInfo::RESOLVE_SYMLINKS = 0;	
 
@@ -1000,6 +1000,7 @@ Perl itself.
 
 =head1 SEE ALSO
 
+L<File::PathInfo::Ext>
 L<Cwd>
 
 =cut
