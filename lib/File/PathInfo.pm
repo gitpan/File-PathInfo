@@ -11,7 +11,7 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.13 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%02d", q$Revision: 1.17 $ =~ /(\d+)/g;
 
 
 my $DEBUG=0; sub DEBUG : lvalue { $DEBUG }
@@ -315,7 +315,15 @@ sub _abs {
 		
 		# IS ARGUMENT ABS PATH ?
 		if ( $argument =~/^\// ) {			
-			$abs_path = Cwd::abs_path($argument) ;
+
+			if (RESOLVE_SYMLINKS){		
+				$abs_path = Cwd::abs_path($argument);
+			}
+
+			else {
+				$abs_path = abs_path_n($argument);
+			}
+				
 			unless($abs_path){ 
 				print STDERR "argument : '$argument', cant resolve with Cwd::abs_path\n" if DEBUG;
 				 return ;
@@ -513,12 +521,14 @@ sub rel_loc {
 
 sub is_topmost {
 	my $self = shift;
+	defined $self->DOCUMENT_ROOT or return 0;
 	$self->abs_loc eq $self->DOCUMENT_ROOT or return 0;
 	return 1;
 }
 
 sub is_DOCUMENT_ROOT {
 	my $self = shift;	
+	defined $self->DOCUMENT_ROOT or return 0;	
 	$self->abs_path eq $self->DOCUMENT_ROOT or return 0;
 	return 1;
 }
@@ -535,11 +545,13 @@ location relative to DOCUMENT_ROOT
 =head2 is_DOCUMENT_ROOT()
 
 if this *is* the document root
+returns undef if DOCUMENT ROOT is not set.
 
 =head2 is_topmost()
 
 if the parent directory is document root.
 boolean.
+returns undef if DOCUMENT ROOT is not set.
 
 =head2 is_in_DOCUMENT_ROOT()
 
@@ -560,6 +572,18 @@ sub is_in_DOCUMENT_ROOT {
 
 	return 1;
 }
+
+sub DOCUMENT_ROOT_set {
+   my ($self,$abs)=@_;
+   defined $abs or confess("missing argument");
+   -d $abs or warn("[$abs] not a dir");
+   
+   $self->{_data}->{DOCUMENT_ROOT} = $abs;
+   return 1;
+}
+
+
+
 
 sub DOCUMENT_ROOT {
 	my $self = shift;	
@@ -611,6 +635,13 @@ of File::PathInfo is:
 First, in argument to contructor
 
 Second, if your environment variable DOCUMENT_ROOT is set. 
+
+You can also call DOCUMENT_ROOT_set() 
+
+=head2 DOCUMENT_ROOT_set()
+
+argumnent is abs path to document root
+will warn if not a dir on disk
 
 =head1 STAT METHODS
 
