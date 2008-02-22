@@ -10,8 +10,7 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.19 $ =~ /(\d+)/g;
-
+$VERSION = sprintf "%d.%02d", q$Revision: 1.20 $ =~ /(\d+)/g;
 
 my $DEBUG=0; sub DEBUG : lvalue { $DEBUG }
 my $RESOLVE_SYMLINKS=1; sub RESOLVE_SYMLINKS : lvalue { $RESOLVE_SYMLINKS }

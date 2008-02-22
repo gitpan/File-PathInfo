@@ -120,7 +120,7 @@ for (
 	my $argument = $_;
 	my $f = new File::PathInfo;
 	
-	ok( ($f->set($argument) ? 0 : 1) );
+	ok( ! $f->set($argument)  ,"set() for '$argument' should fail");
 	
 #	my $exists = $f->set($argument);
  #  $exists ||= 0;
