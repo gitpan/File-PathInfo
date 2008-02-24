@@ -10,12 +10,14 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.20 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%02d", q$Revision: 1.21 $ =~ /(\d+)/g;
 
-my $DEBUG=0; sub DEBUG : lvalue { $DEBUG }
-my $RESOLVE_SYMLINKS=1; sub RESOLVE_SYMLINKS : lvalue { $RESOLVE_SYMLINKS }
-my $TIME_FORMAT = 'yyyy/mm/dd hh::mm'; 
-sub TIME_FORMAT : lvalue { $TIME_FORMAT }
+$File::PathInfo::DEBUG =0;
+sub DEBUG : lvalue { $File::PathInfo::DEBUG }
+$file::PathInfo::RESOLVE_SYMLINKS=1; 
+sub RESOLVE_SYMLINKS : lvalue { $File::PathInfo::RESOLVE_SYMLINKS }
+$File::PathInfo::TIME_FORMAT = 'yyyy/mm/dd hh::mm'; 
+sub TIME_FORMAT : lvalue { $File::PathInfo::TIME_FORMAT }
 
 
 sub new {
@@ -124,7 +126,9 @@ sub _abs {
 			}	
 	
 			unless( $abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument) ){
-            print STDERR "argument: '$argument' cant resolve as relative to DOCUMENT ROOT either\n" if DEBUG;
+            print STDERR 
+               "argument: '$argument' cant resolve as relative to DOCUMENT ROOT either\n" 
+               if DEBUG;
             return 0 ;
 			}	
 	
@@ -354,21 +358,23 @@ sub _stat {
 		
 		$data->{ filesize_pretty }	= ( sprintf "%d",($data->{size} / 1024 )).'k';
 
-      require Time::Format;
-      $self->{time_format} ||= 'yyyy/mm/dd hh:mm';
+      require Time::Format;      
       for my $v (qw(ctime atime mtime)){
-         $data->{$v.'_pretty'} = Time::Format::time_format($self->{time_format}, $data->{$v} );
+         $data->{$v.'_pretty'} = Time::Format::time_format($self->_time_format, $data->{$v} );
       }
          
-		#$data->{ ctime_pretty }		= $time{$self->{time_format},$data->{ctime}};
-		#$data->{ atime_pretty }		= $time{$self->{time_format},$data->{atime}};
-		#$data->{ mtime_pretty }		= $time{$self->{time_format},$data->{mtime}};
 		$data->{ filesize }		= $data->{size};
 	
 		$self->{_data}->{_stat} = $data;		
 	}
 
 	return $self->{_data}->{_stat};	
+}
+
+sub _time_format {
+   my $self = shift;
+   $self->{time_format} ||= 'yyyy/mm/dd hh:mm';
+   return $self->{time_format};
 }
 
 sub is_binary {
@@ -399,35 +405,20 @@ sub size {
  my $self = shift;
  return $self->_stat->{size};
 }
-
-sub filesize_pretty  { 
- my $self = shift;
- return $self->_stat->{filesize_pretty};
-}
-
 sub ctime  {
  my $self = shift;
  return $self->_stat->{ctime};
 }
-
-sub ctime_pretty  { 
- my $self = shift;
- return $self->_stat->{ctime_pretty};
-}
-
 sub atime  { 
  my $self = shift;
  return $self->_stat->{atime};
 }
 
-sub atime_pretty  { 
- my $self = shift;
- return $self->_stat->{atime_pretty};
-}
 
-sub mtime  { 
+
+sub ctime_pretty  { 
  my $self = shift;
- return $self->_stat->{mtime};
+ return $self->_stat->{ctime_pretty};
 }
 
 sub mtime_pretty  { 
@@ -435,6 +426,22 @@ sub mtime_pretty  {
  return $self->_stat->{mtime_pretty}; 
 }
 
+sub atime_pretty  { 
+ my $self = shift;
+ return $self->_stat->{atime_pretty};
+}
+
+
+
+sub filesize_pretty  { 
+ my $self = shift;
+ return $self->_stat->{filesize_pretty};
+}
+
+sub mtime  { 
+ my $self = shift;
+ return $self->_stat->{mtime};
+}
 sub ino  { 
  my $self = shift;
  return $self->_stat->{ino};

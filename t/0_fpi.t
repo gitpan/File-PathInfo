@@ -114,7 +114,7 @@ $b->set('./t/public_html/demo/../demo/cvil.txt');
 for (
 './t/public_html/de41zmo',
 'demvo2',
-'./t/public_html/demo/../demo/civil.txt/',
+'./t/public_html/demo/../demo/civil.rtxt/',
 ){
 	
 	my $argument = $_;
