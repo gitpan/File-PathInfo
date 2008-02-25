@@ -10,9 +10,10 @@ use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.21 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%02d", q$Revision: 1.22 $ =~ /(\d+)/g;
 
 $File::PathInfo::DEBUG =0;
+
 sub DEBUG : lvalue { $File::PathInfo::DEBUG }
 $file::PathInfo::RESOLVE_SYMLINKS=1; 
 sub RESOLVE_SYMLINKS : lvalue { $File::PathInfo::RESOLVE_SYMLINKS }
@@ -982,7 +983,9 @@ Debug
 	
 =head1 CAVEATS
 
-This is currently for unix filesystems.
+This is currently for unix filesystems. File::PathInfo will NOT work on non POSIX operating
+systems. Trying to set an abs path like C:/something will throw an exception.
+
 The module gets very angry when you set() seomthing like '/etc', anything that sits close to
 the root of the filesystem. This is on purpose.
 

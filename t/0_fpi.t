@@ -9,6 +9,13 @@ $ENV{DOCUMENT_ROOT} = cwd().'/t/public_html';
 
 use Carp;
 
+
+ok(1,'started test 1..');
+if($^O=~/^dos|os2|mswin32|mswin|netware/i){
+   print STDERR "File::PathInfo will not work on non posix platforms\n";
+   exit;
+}
+
 # test ones we know are in docroot
 for (qw(
 ./t/public_html/demo

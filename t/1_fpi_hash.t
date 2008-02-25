@@ -5,7 +5,12 @@ use lib './lib';
 use File::PathInfo;
 $ENV{DOCUMENT_ROOT} = cwd()."/t/public_html";
 
-
+ok(1,'started test 1..');
+if($^O=~/^dos|os2|mswin32|mswin|netware/i){
+   print STDERR "File::PathInfo will not work on non posix platforms\n";
+   exit;
+}
+      
 
 
 my $r = new File::PathInfo;
