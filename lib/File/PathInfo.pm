@@ -4,15 +4,15 @@ use Carp;
 use strict;
 use warnings;
 require Exporter;
-use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION);
+use vars qw(@ISA @EXPORT_OK %EXPORT_TAGS $VERSION $DEBUG);
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(abs_path_n);
 %EXPORT_TAGS = (
 	all => \@EXPORT_OK,
 );
-$VERSION = sprintf "%d.%02d", q$Revision: 1.26 $ =~ /(\d+)/g;
+$VERSION = sprintf "%d.%02d", q$Revision: 1.27 $ =~ /(\d+)/g;
 
-$File::PathInfo::DEBUG =0;
+$DEBUG =0;
 
 sub DEBUG : lvalue { $File::PathInfo::DEBUG }
 $file::PathInfo::RESOLVE_SYMLINKS=1; 
@@ -20,11 +20,11 @@ sub RESOLVE_SYMLINKS : lvalue { $File::PathInfo::RESOLVE_SYMLINKS }
 $File::PathInfo::TIME_FORMAT = 'yyyy/mm/dd hh::mm'; 
 sub TIME_FORMAT : lvalue { $File::PathInfo::TIME_FORMAT }
 
-make_get_premethod( '_stat' => qw(is_binary is_dir is_text is_file filesize size ctime 
+___make_get_premethod( '_stat' => qw(is_binary is_dir is_text is_file filesize size ctime 
    atime ctime_pretty atime_pretty mtime_pretty filesize_pretty mtime ino rdev gid uid 
    dev blocks blksize mode nlink));
 
-make_get_premethod( _abs => qw(abs_path filename abs_loc ext filename_only));
+___make_get_premethod( _abs => qw(abs_path filename abs_loc ext filename_only));
 
 
 sub new {
@@ -33,21 +33,15 @@ sub new {
 	
 	my $arg;
 	unless( ref $self ){
-		print STDERR "arg is not a ref, treating as arg\n" if DEBUG;
-		# assume to be path argument
+		print STDERR "arg is not a ref, treating as arg\n" if $DEBUG; # assume to be path argument
 		$arg = $self;
 		$self = {};	
-	}
-	
+	}	
 	bless $self, $class;			
 
-	if ($arg){
-		print STDERR "will run set, " if DEBUG;
-		$self->set($arg);
-		print STDERR "ok\n" if DEBUG;
-	}	
+	if ($arg){ $self->set($arg) or Carp::cluck("failed set() $arg") }	
 		
-	return $self;	
+	$self;	
 }
 
 
@@ -56,13 +50,14 @@ sub set {
 	$self->{_data} = undef;	
    my $arg = shift;
 	$self->{_data}->{_argument} = $arg;	
-	unless($self->_abs){
-      carp("set() '$arg' is not on disk.");
+   
+	unless( $self->_abs){
+      Carp::cluck("set() '$arg' is not on disk.");
       $self->{_data}->{exists} = 0 ;
       return 0;
    }  
    $self->{_data}->{exists} = 1 ;
-	return 1;
+	$self->abs_path;
 }
 
 sub _argument {
@@ -105,7 +100,7 @@ sub _abs {
 			}
 				
 			unless($abs_path){ 
-				print STDERR "argument : '$argument', cant resolve with Cwd::abs_path\n" if DEBUG;
+				print STDERR "argument : '$argument', cant resolve with Cwd::abs_path\n" if $DEBUG;
 				 return ;
 			}	
 		}
@@ -117,7 +112,7 @@ sub _abs {
 		elsif ( $argument =~/^\.\// ){
 			unless( $abs_path = Cwd::abs_path(cwd().'/'.$argument) ){
 					print STDERR "argument: '$argument', "
-					."cant resolve as path rel to current working dir with Cwd abs_path\n" if DEBUG;
+					."cant resolve as path rel to current working dir with Cwd abs_path\n" if $DEBUG;
 					return 0 ;
 			}	
 		}
@@ -128,14 +123,14 @@ sub _abs {
 			### assume to be rel path then	
 			unless( $self->DOCUMENT_ROOT ){
 				print STDERR "argument: '$argument'- DOCUMENT_ROOT "
-				."is not set, needed for an argument starting with a dot\n" if DEBUG
+				."is not set, needed for an argument starting with a dot\n" if $DEBUG
 				and return 0;
 			}	
 	
 			unless( $abs_path = Cwd::abs_path($self->DOCUMENT_ROOT .'/'.$argument) ){
             print STDERR 
                "argument: '$argument' cant resolve as relative to DOCUMENT ROOT either\n" 
-               if DEBUG;
+               if $DEBUG;
             return 0 ;
 			}	
 	
@@ -153,7 +148,7 @@ sub _abs {
       } 
 		if ($self->{check_exist}){
 			unless( -e $_abs->{abs_path} ){ 
-				print STDERR "'$$_abs{abs_path}' is not on disk\n" if DEBUG;
+				print STDERR "'$$_abs{abs_path}' is not on disk\n" if $DEBUG;
 				#$self->_error( $_abs->{abs_path} ." is not on disk.");
             ### $abs_path 
             ### is explicitely !-e on disk            
@@ -178,7 +173,7 @@ sub _abs {
 		$self->{_data}->{_abs} = $_abs;	
 	}
 	
-	return $self->{_data}->{_abs};
+	$self->{_data}->{_abs};
 }
 
 
@@ -208,7 +203,7 @@ sub _rel {
          
          unless( $self->is_in_DOCUMENT_ROOT ){ 
 				warn("cant use rel methods because this file [$abs_path] is "
-				."NOT WITHIN DOCUMENT ROOT:".$self->DOCUMENT_ROOT) if DEBUG;
+				."NOT WITHIN DOCUMENT ROOT:".$self->DOCUMENT_ROOT) if $DEBUG;
 				return $_rel;
 			}	
          
@@ -237,7 +232,7 @@ sub _rel {
 	return $self->{_data}->{_rel};
 }
 
-make_get_premethod( _rel => qw(rel_path rel_loc) );
+___make_get_premethod( _rel => qw(rel_path rel_loc) );
 
 sub is_topmost {
 	my $self = shift;
@@ -305,7 +300,7 @@ sub DOCUMENT_ROOT {
 sub _stat {
 	my $self = shift;
    unless( $self->exists ){
-		carp('File::PathInfo : no file is set(). Use set().') if DEBUG;
+		Carp::cluck('File::PathInfo : no file is set(). Use set().');
 		return {};
 	}	
 	croak($self->errstr) if $self->errstr;
@@ -361,7 +356,7 @@ sub _time_format {
 #	my $self = shift;
 #	return $self->_stat->{is_binary};
 # }
-sub make_get_premethod {
+sub ___make_get_premethod {
    my $method_data = shift;   
    no strict 'refs';
    for my $method_name ( @_ ){
@@ -372,39 +367,27 @@ sub make_get_premethod {
 
 
 sub get_datahash {
-	my $self = shift;
-	
 	my $data = {};	
-   for my $method_data ( qw(_abs _rel _stat) ){      
-      KEY: while( my ($k,$v) = each %{$self->$method_data} ){
+   for my $method ( qw(_abs _rel _stat) ){      
+      KEY: while( my ($k,$v) = each %{$_[0]->$method} ){
          defined $v or next KEY;
          $data->{$k} =$v;
       }
    }
-
-	return $data;	
+	$data;	
 }
 
-sub _error {
-	my $self = shift;
-	my $arg = shift;
-	$self->{_data}->{_errors}.="File::Info, $arg\n";
-	return;
-}
+sub _error { $_[0]->{_data}->{_errors}.="File::Info, $_[1]\n" }
 sub errstr {
 	my $self = shift;
    ($self->{_data}->{_errors} = $_[0]) if $_[0];
-
-	defined $self->{_data}->{_errors} or return;
-	return $self->{_data}->{_errors};
+	$self->{_data}->{_errors}
 }
 
 sub exists {
    my $self = shift;
-
-   defined $self->{_data}->{exists} or croak('must call set() first');
-      
-   return $self->{_data}->{exists};
+   defined $self->{_data}->{exists} or confess('must call set() first');      
+   $self->{_data}->{exists};
 }
 
 

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               File-PathInfo
-version:            1.26
+version:            1.27
 abstract:           oo access to path variables stat data about a file on disk
 author:
     - Leo Charre leocharre at cpan dot org

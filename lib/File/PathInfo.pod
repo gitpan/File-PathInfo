@@ -153,8 +153,8 @@ Argument is a relative or absolute file path.
    
 	$f->set('./thisfile.png'); # relative to current working directory
 
-Method C<set()> returns boolean, true or false. If the file cannot be resolved to disk
-then it returns undef.
+Method C<set()> returns abs path. If the file cannot be resolved to disk
+then it warns and returns undef.
 If you then call any methods, exceptions are thrown with Carp::croak.
 
 You can do this too:
@@ -162,6 +162,8 @@ You can do this too:
 	$f->set('/home/myself/html/documents/manual.pdf') or die( $File::PathInfo::errstr );
 	
 	$f->set('documents/manual.pdf') or print "Location: 404.html\n\n" and exit; 
+
+Returns abs path resolved to item in question.
 
 =head2 get_datahash()
 
